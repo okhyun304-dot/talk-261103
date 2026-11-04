@@ -193,8 +193,14 @@ function renderHome(){
   }).join("");
 }
 $("files").addEventListener("click", e => { const b = e.target.closest(".file"); if (b) openTrack(+b.dataset.i); });
-function goHome(){ if (ti >= 0) store.set("pos:" + ti, au.currentTime); au.pause(); $("doc").style.display = "none"; $("player").style.display = "none"; $("follow").classList.remove("on"); $("home").style.display = ""; renderHome(); history.replaceState(null, "", "#"); }
-$("backHome").onclick = goHome;
+// 휴대폰 뒤로가기: 녹음을 열 때 기록을 하나 쌓고(pushState), 뒤로가기(popstate)면 목록으로
+function goHome(fromHistory){
+  if (!fromHistory && history.state && history.state.t >= 0) { history.back(); return; }   // 화면의 ← 도 뒤로가기와 똑같이
+  if (ti >= 0) store.set("pos:" + ti, au.currentTime); au.pause(); $("doc").style.display = "none"; $("player").style.display = "none"; $("follow").classList.remove("on"); $("home").style.display = ""; renderHome();
+  if (!fromHistory) history.replaceState({}, "", "#");
+}
+$("backHome").onclick = () => goHome(false);
+window.addEventListener("popstate", e => { const s = e.state || {}; if (s.t >= 0 && DATA.tracks[s.t]) openTrack(s.t, true); else goHome(true); });
 
 // ── 스크립트: 같은 사람이 이어서 말한 줄은 한 덩어리로 (다글로처럼) ──
 function turnsOf(tr){
@@ -264,7 +270,7 @@ body.addEventListener("click", e => {
   seekTo(DATA.tracks[ti].segs[+s.dataset.i][0]); au.play();
 });
 
-function openTrack(i){
+function openTrack(i, fromHistory){
   $("home").style.display = "none"; $("doc").style.display = "block"; $("player").style.display = "block";
   if (ti !== i || !au.src) {
     if (ti >= 0) store.set("pos:" + ti, au.currentTime);
@@ -272,7 +278,8 @@ function openTrack(i){
     const p = store.get("pos:" + i, 0);
     au.addEventListener("loadedmetadata", () => { if (p > 0) au.currentTime = p; setRate(store.get("speed", 1)); }, {once: true});
   }
-  store.set("track", i); history.replaceState(null, "", "#" + i);
+  store.set("track", i);
+  if (!fromHistory) { if (history.state && history.state.t >= 0) history.replaceState({t: i}, "", "#" + i); else history.pushState({t: i}, "", "#" + i); }
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({title: DATA.tracks[i].name, artist: DATA.title});
   $("docTitle").textContent = DATA.tracks[i].name; $("dur").textContent = fmt(DATA.tracks[i].dur);
   $("sumTab").style.display = DATA.tracks.some(t => t.summary) ? "" : "none";
@@ -356,6 +363,7 @@ document.addEventListener("keydown", e => {
 
 renderHome();
 const h0 = parseInt(location.hash.slice(1), 10);
+history.replaceState({}, "", "#");                     // 맨 아래 기록 = 목록 (주소에 #번호로 들어와도 뒤로가기하면 목록)
 if (!isNaN(h0) && DATA.tracks[h0]) openTrack(h0);
 </script>
 </body>
